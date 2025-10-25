@@ -1,0 +1,12 @@
+pyproject.toml
+src/dataset.py
+src/pretrain_and_compress.py
+src/sws_compressor.py
+src/util.py
+src/models/lenet.py
+src/models/utils.py
+src/tutorial_softweightsharingfornncompression.egg-info/PKG-INFO
+src/tutorial_softweightsharingfornncompression.egg-info/SOURCES.txt
+src/tutorial_softweightsharingfornncompression.egg-info/dependency_links.txt
+src/tutorial_softweightsharingfornncompression.egg-info/requires.txt
+src/tutorial_softweightsharingfornncompression.egg-info/top_level.txt
