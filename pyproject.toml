@@ -5,7 +5,19 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "keras>=3.11.3",
     "matplotlib>=3.10.7",
     "tensorflow>=2.20.0",
+    "tqdm>=4.66.0",
+    "pillow>=10.0.0",
+    "imageio>=2.9.0",
+]
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
 ]
