@@ -5,8 +5,8 @@ This module provides functionality for retraining models with mixture prior regu
 """
 
 import tensorflow as tf
-from prior import init_mixture
-from data import get_mnist_data, get_cifar10_data, get_cifar100_data
+from .prior import init_mixture
+from .data import get_mnist_data, get_cifar10_data, get_cifar100_data
 from tqdm import trange
 
 

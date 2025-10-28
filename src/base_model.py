@@ -1,4 +1,4 @@
-from data import get_mnist_data, get_cifar10_data, get_cifar100_data
+from .data import get_mnist_data, get_cifar10_data, get_cifar100_data
 import keras
 
 
