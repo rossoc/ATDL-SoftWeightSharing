@@ -30,6 +30,7 @@ def retraining(
     logger=None,  # optional CSVLogger
     eval_every=1,  # how often to evaluate
     eval=None,
+    verbose=1,
 ):
     """
     Retrain a model with mixture prior regularization.
@@ -129,11 +130,16 @@ def retraining(
         epoch_complex_loss = 0
         num_batches = 0
 
-        pbar = tqdm(
-            train_dataset,
-            desc=f"Retraining {epoch}/{epochs}",
-            leave=True,
+        pbar = (
+            tqdm(
+                train_dataset,
+                desc=f"Retraining {epoch}/{epochs}",
+                leave=True,
+            )
+            if verbose > 0
+            else train_dataset
         )
+
         for x_batch, y_batch in pbar:
             total_loss, err_loss, complex_loss = train_step(x_batch, y_batch)
             epoch_total_loss += total_loss
@@ -141,13 +147,14 @@ def retraining(
             epoch_complex_loss += complex_loss
             num_batches += 1
 
-            pbar.set_postfix(
-                {
-                    "Total Loss": f"{float(tf.reduce_mean(total_loss).numpy()):.4f}",
-                    "Err Loss": f"{float(tf.reduce_mean(err_loss).numpy()):.4f}",
-                    "Complex Loss": f"{float(tf.reduce_mean(complex_loss).numpy()):.4f}",
-                }
-            )
+            if verbose > 0:
+                pbar.set_postfix(
+                    {
+                        "Total Loss": f"{float(tf.reduce_mean(total_loss).numpy()):.4f}",
+                        "Err Loss": f"{float(tf.reduce_mean(err_loss).numpy()):.4f}",
+                        "Complex Loss": f"{float(tf.reduce_mean(complex_loss).numpy()):.4f}",
+                    }
+                )
 
         avg_total_loss = tf.reduce_mean(epoch_total_loss / num_batches)
         avg_err_loss = tf.reduce_mean(epoch_err_loss / num_batches)
@@ -158,7 +165,7 @@ def retraining(
         if eval and eval_every > 0 and (epoch + 1) % eval_every == 0:
             _, test_acc = model.evaluate(x_test, y_test, verbose=0)
 
-        if viz is not None:
+        if viz:
             viz.on_epoch_end(epoch + 1, model, prior, test_acc=test_acc)
 
         # Log metrics if logger provided
@@ -176,12 +183,12 @@ def retraining(
             )
 
     # finalize GIF
-    if viz is not None:
+    if viz is not None and verbose > 0:
         gif_path = viz.on_train_end()
         print(f"[viz] wrote GIF to: {gif_path}")
 
     # Evaluate the retrained model
-    if eval:
+    if eval and verbose > 0:
         _, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
         print(f"Test accuracy after retraining with prior: {test_accuracy:.4f}")
 

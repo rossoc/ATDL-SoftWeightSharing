@@ -16,6 +16,7 @@ dependencies = [
     "pillow>=10.0.0",
     "imageio>=2.9.0",
     "ipython>=9.6.0",
+    "optuna>=4.5.0",
 ]
 
 [project.optional-dependencies]

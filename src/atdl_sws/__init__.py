@@ -11,6 +11,7 @@ from .util import (
     get_data_model_mappings,
     evaluate_model,
     setup_log,
+    sparsity,
 )
 from .prior import MixturePrior
 from .metrics import Metrics

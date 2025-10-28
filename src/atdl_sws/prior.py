@@ -74,8 +74,8 @@ class MixturePrior(layers.Layer):
         gamma_beta: float = 0.1,
         gamma_alpha0: float = 5000.0,  # zero comp
         gamma_beta0: float = 2.0,
-        beta_alpha: float = 500,
-        beta_beta: float = 6,
+        # beta_alpha: float = 500,
+        # beta_beta: float = 6,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -87,8 +87,8 @@ class MixturePrior(layers.Layer):
         self.gamma_beta = gamma_beta
         self.gamma_alpha0 = tf.cast(gamma_alpha0, tf.float32)
         self.gamma_beta0 = gamma_beta0
-        self.beta_alpha = tf.cast(beta_alpha, tf.float32)
-        self.beta_beta = tf.cast(beta_beta, tf.float32)
+        # self.beta_alpha = tf.cast(beta_alpha, tf.float32)
+        # self.beta_beta = tf.cast(beta_beta, tf.float32)
         self.eps = 1e-8
         self.init_log_sigma2 = init_log_sigma2
 

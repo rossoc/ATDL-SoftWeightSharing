@@ -13,6 +13,7 @@ import logging
 import sys
 import os
 import absl.logging
+import tensorflow as tf
 
 
 def setup_log(save_dir=None):
@@ -108,3 +109,17 @@ def setup_visualization_and_logging(args, model_name, mode="retraining"):
         )
 
     return viz, logger
+
+
+def sparsity(model):
+    """Calculate sparsity (|W=0|/|W|)"""
+    total_params = 0
+    zero_params = 0
+
+    for var in model.trainable_variables:
+        var_numpy = var.numpy()
+        var_size = var_numpy.size
+        total_params += var_size
+        zero_params += (var_numpy == 0).sum()
+
+    return zero_params / total_params if total_params > 0 else 0.0
