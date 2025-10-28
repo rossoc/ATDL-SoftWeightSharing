@@ -139,7 +139,7 @@ class ResNet(Model):
         out = self.block3(out)
         out = tf.nn.relu(self.bn(out))
         out = self.avg_pool(out)
-        return self.fc(out)
+        return tf.nn.softmax(self.fc(out))
 
     def get_config(self):
         config = super(ResNet, self).get_config()

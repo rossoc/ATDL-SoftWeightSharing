@@ -1,6 +1,5 @@
 from argparse import ArgumentParser
-from models import lenet_caffe, lenet_300_100, ResNet
-from retraining import retraining
+from atdl_sws import lenet_caffe, lenet_300_100, ResNet, retraining
 
 
 if __name__ == "__main__":
@@ -88,4 +87,3 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         save_dir=args.save_dir,
     )
-
