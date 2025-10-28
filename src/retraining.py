@@ -62,6 +62,11 @@ def retraining(
         model, J=prior_J, pi0=prior_pi0, init_sigma=prior_init_sigma, **prior_kwargs
     )
 
+    # Build the prior layer to initialize its variables
+    # We need to build the layer to create the trainable variables before using them
+    dummy_weights = [tf.constant([[0.0]])]  # Dummy weights for building the layer
+    _ = prior(dummy_weights)
+
     # Set up separate optimizers for different parameters
     lr_w = lr_w or learning_rate
     lr_mu = lr_mu or learning_rate * 10
@@ -76,7 +81,7 @@ def retraining(
     # Define training step with custom gradients
     @tf.function
     def train_step(x_batch, y_batch):
-        with tf.GradientTape() as tape:
+        with tf.GradientTape(persistent=True) as tape:
             # Compute model predictions
             predictions = model(x_batch, training=True)
             err_loss = tf.keras.losses.categorical_crossentropy(y_batch, predictions)
@@ -102,6 +107,9 @@ def retraining(
         )
         pi_optimizer.apply_gradients([(prior_grads[2], prior.trainable_variables[2])])
 
+        # Delete the persistent tape to avoid memory leaks
+        del tape
+
         return total_loss, err_loss, complex_loss
 
     # Create dataset
@@ -124,17 +132,17 @@ def retraining(
             epoch_complex_loss += complex_loss
             num_batches += 1
 
-        avg_total_loss = epoch_total_loss / num_batches
-        avg_err_loss = epoch_err_loss / num_batches
-        avg_complex_loss = epoch_complex_loss / num_batches
+        avg_total_loss = tf.reduce_mean(epoch_total_loss / num_batches)
+        avg_err_loss = tf.reduce_mean(epoch_err_loss / num_batches)
+        avg_complex_loss = tf.reduce_mean(epoch_complex_loss / num_batches)
 
         # Update progress bar with losses
         pbar.set_description(f"Retraining {epoch + 1}/{epochs}")
         pbar.set_postfix(
             {
-                "Total Loss": f"{avg_total_loss:.4f}",
-                "Err Loss": f"{avg_err_loss:.4f}",
-                "Complex Loss": f"{avg_complex_loss:.4f}",
+                "Total Loss": f"{float(avg_total_loss.numpy()):.4f}",
+                "Err Loss": f"{float(avg_err_loss.numpy()):.4f}",
+                "Complex Loss": f"{float(avg_complex_loss.numpy()):.4f}",
             }
         )
 
