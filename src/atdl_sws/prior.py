@@ -21,6 +21,36 @@ def logsumexp(x, axis=-1):
     )
 
 
+def flatten_weights(model_weights):
+    flattened_weights = []
+    for W in model_weights:
+        if len(W.shape) > 0:
+            flattened_weights = tf.concat(
+                [flattened_weights, tf.reshape(W, [-1])], axis=0
+            )
+
+    return flattened_weights
+
+
+def hyperprior(alpha, beta, lam):
+    return (
+        alpha * tf.math.log(beta)
+        - tf.math.lgamma(alpha)
+        + (alpha - 1) * tf.math.log(lam)
+        - beta * lam
+    )
+
+
+def beta_hyperprior(alpha, beta, pi, eps=1e-8):
+    return (
+        math.lgamma(alpha + beta)
+        - math.lgamma(alpha)
+        - math.lgamma(beta)
+        + (alpha - 1.0) * tf.math.log(pi + eps)
+        + (beta - 1.0) * tf.math.log(1.0 - pi + eps)
+    )
+
+
 class MixturePrior(layers.Layer):
     """
     Factorized Gaussian mixture prior over weights for Keras models:
@@ -35,15 +65,17 @@ class MixturePrior(layers.Layer):
 
     def __init__(
         self,
+        model,
         J: int,
         pi0: float = 0.999,
-        init_means: Optional[np.ndarray] = None,
         init_log_sigma2: float = math.log(0.25**2),
         # --- Hyper-priors ON by default (tutorial values) ---
-        gamma_alpha: Optional[float] = 250.0,  # non-zero comps
-        gamma_beta: Optional[float] = 0.1,
-        gamma_alpha0: Optional[float] = 5000.0,  # zero comp
-        gamma_beta0: Optional[float] = 2.0,
+        gamma_alpha: float = 250.0,  # non-zero comps
+        gamma_beta: float = 0.1,
+        gamma_alpha0: float = 5000.0,  # zero comp
+        gamma_beta0: float = 2.0,
+        beta_alpha: float = 500,
+        beta_beta: float = 6,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -51,17 +83,23 @@ class MixturePrior(layers.Layer):
         self.J = J
         self.pi0 = float(pi0)
 
-        self.gamma_alpha = gamma_alpha
+        self.gamma_alpha = tf.cast(gamma_alpha, tf.float32)
         self.gamma_beta = gamma_beta
-        self.gamma_alpha0 = gamma_alpha0
+        self.gamma_alpha0 = tf.cast(gamma_alpha0, tf.float32)
         self.gamma_beta0 = gamma_beta0
+        self.beta_alpha = tf.cast(beta_alpha, tf.float32)
+        self.beta_beta = tf.cast(beta_beta, tf.float32)
         self.eps = 1e-8
         self.init_log_sigma2 = init_log_sigma2
 
-        if init_means is None:
-            self.init_means = np.linspace(-0.6, 0.6, J - 1)
-        else:
-            self.init_means = init_means
+        weights = [layer.kernel for layer in model.layers if hasattr(layer, "kernel")]
+
+        flattened_weights = np.array(flatten_weights(weights))
+
+        wmin, wmax = np.min(flattened_weights), np.max(flattened_weights)
+        self.init_means = np.linspace(wmin, wmax, J - 1)
+
+        _ = self(weights)
 
     def build(self, input_shape):
         """Build the layer and create trainable variables."""
@@ -114,7 +152,7 @@ class MixturePrior(layers.Layer):
 
         mu_final = tf.concat([tf.constant([0.0], dtype=tf.float32), mu_param], axis=0)
 
-        sigma2 = (tf.exp(log_sigma2_param),)
+        sigma2 = tf.exp(log_sigma2_param)
 
         sigma2 = tf.clip_by_value(
             sigma2, clip_value_min=1e-8, clip_value_max=float("inf")
@@ -141,46 +179,25 @@ class MixturePrior(layers.Layer):
 
         return logsumexp(log_pi + log_norm, axis=1)
 
-    def complexity_loss(self, model_weights: List[tf.Variable]) -> tf.Tensor:
+    def complexity_loss(self, w_flat) -> tf.Tensor:
         """
         Compute the complexity loss (negative log prior probability) for model weights.
         """
-        flattened_weights = []
-        for W in model_weights:
-            if len(W.shape) > 0:
-                flattened_weights.append(tf.reshape(W, [-1]))
-
-        if not flattened_weights:
-            raise Exception("Complexity loss not computed")
-
-        w_flat = tf.concat(flattened_weights, axis=0)
-
-        log_prob_w = self.log_prob_w(w_flat)  # type: ignore
-        total_loss = -tf.reduce_sum(log_prob_w)
+        total_loss = -self.log_prob_w(w_flat)  # type: ignore
 
         _, sigma2, _ = self.mixture_params()
         lambdas = 1.0 / sigma2  # type: ignore
 
         # Zero component hyperprior
-        if self.gamma_alpha0 is not None and self.gamma_beta0 is not None:
-            a0, b0 = self.gamma_alpha0, self.gamma_beta0
-            lambda0 = lambdas[0]
-            gamma_term_0 = (
-                a0 * tf.math.log(b0)
-                - tf.math.lgamma(a0)
-                + (a0 - 1.0) * tf.math.log(lambda0)
-                - b0 * lambda0
-            )
-            total_loss -= gamma_term_0
+        gamma_0 = hyperprior(self.gamma_alpha0, self.gamma_beta0, lambdas[0])
+        total_loss -= gamma_0
 
         # Non-zero components hyperprior
-        if self.gamma_alpha is not None and self.gamma_beta is not None:
-            a, b = self.gamma_alpha, self.gamma_beta
-            lambdas = lambdas[1:]
-            gamma_terms_nonzero = (a * tf.math.log(b) - tf.math.lgamma(a)) + (
-                (a - 1.0) * tf.math.log(lambdas) - b * lambdas
-            )
-            total_loss -= tf.reduce_sum(gamma_terms_nonzero)
+        gamma_nonzero = hyperprior(self.gamma_alpha, self.gamma_beta, lambdas[1:])
+        total_loss -= tf.reduce_sum(gamma_nonzero)
+
+        # beta_zero = beta_hyperprior(self.beta_alpha, self.beta_beta, self.pi0)
+        # total_loss -= beta_zero
 
         return total_loss
 
@@ -188,9 +205,9 @@ class MixturePrior(layers.Layer):
         """
         Computes the complexity loss and adds it to the layer's losses.
         """
-        complexity_loss = self.complexity_loss(inputs)
+        w_flat = flatten_weights(inputs)
+        complexity_loss = self.complexity_loss(w_flat)
         self.add_loss(complexity_loss)
-
         return inputs[0]
 
     def get_config(self):
@@ -209,7 +226,7 @@ class MixturePrior(layers.Layer):
         )
         return config
 
-    def merge_components(self, kl_threshold: float = 1e-10, max_iter: int = 200):
+    def merge_components(self, kl_threshold: float = 1e-7, max_iter: int = 200):
         """
         Merge similar components in the mixture model.
         This is a simplified version for Keras implementation.
@@ -261,12 +278,11 @@ class MixturePrior(layers.Layer):
 
         # Update parameters
         if len(mu_np) > 1:
-            # Update the trainable variables
-            self.mu.assign(mu_np[1:])  # Exclude zero component
-            self.log_sigma2.assign(np.log(sigma2_np[1:]))  # Exclude zero component
-            pi_nonzero = pi_np[1:]  # Exclude zero component
-            pi_nonzero = pi_nonzero / (np.sum(pi_nonzero) + 1e-12)  # Normalize
-            self.pi_logits.assign(np.log(pi_nonzero + 1e-12))  # Convert to logits
+            self.mu = mu_np[1:]
+            self.log_sigma2 = np.log(sigma2_np)
+            pi_nonzero = pi_np[1:]
+            pi_nonzero = pi_nonzero / (np.sum(pi_nonzero) + 1e-12)
+            self.pi_logits = np.log(pi_nonzero + 1e-12)
 
     def _kl_gauss(self, mu0, s0, mu1, s1) -> float:
         """Compute KL divergence between two Gaussian distributions."""
@@ -286,20 +302,17 @@ class MixturePrior(layers.Layer):
         sigma2_np = sigma2.numpy()  # type: ignore
 
         mu_expanded = np.expand_dims(mu_np, axis=0)  # [1, J]
-        inv_s2 = 1.0 / sigma2_np
-        inv_s2 = np.expand_dims(inv_s2, axis=0)  # [1, J]
+        inv_s2 = np.expand_dims(1.0 / sigma2_np, axis=0)  # [1, J]
 
         weight_layers = []
         for layer in model.layers:
             if hasattr(layer, "kernel"):  # Dense, Conv2D layers
                 weight_layers.append((layer, "kernel"))
             elif hasattr(layer, "weights") and len(layer.weights) > 0:
-                # Other layers that might have weights
                 for i, w in enumerate(layer.weights):
                     if "kernel" in w.name or "weight" in w.name:
                         weight_layers.append((layer, i))
 
-        # Last 2D weight index (for potentially skipping)
         last_2d_idx = -1
         for idx, (layer, param_name) in enumerate(weight_layers):
             if hasattr(layer, "kernel"):
@@ -327,46 +340,4 @@ class MixturePrior(layers.Layer):
             quantized_flat[zero_mask] = 0.0
             quantized_values = quantized_flat.reshape(weight_values.shape)
             weight_tensor.assign(quantized_values)
-
-
-def init_mixture(
-    model,
-    J: int,
-    pi0: float,
-    init_means_mode: str = "from_weights",
-    init_range_min: float = -0.6,
-    init_range_max: float = 0.6,
-    init_sigma: float = 0.25,
-):
-    """
-    Initialize a mixture prior based on the model's weights.
-    """
-    # Get all trainable weights from dense and conv layers
-    weight_values = []
-    for layer in model.layers:
-        if hasattr(layer, "kernel"):  # Dense, Conv2D layers
-            weight_values.append(layer.kernel.numpy())
-        elif hasattr(layer, "weights"):
-            for w in layer.weights:
-                if "kernel" in w.name or "weight" in w.name:
-                    weight_values.append(w.numpy())
-
-    # Initialize means based on the mode
-    if init_means_mode == "from_weights" and weight_values:
-        all_weights = np.concatenate([w.flatten() for w in weight_values])
-        wmin, wmax = np.min(all_weights), np.max(all_weights)
-        if wmin == wmax:
-            wmin, wmax = -0.6, 0.6
-        means = np.linspace(wmin, wmax, J - 1)
-    else:
-        means = np.linspace(init_range_min, init_range_max, J - 1)
-
-    # Create and return the mixture prior
-    prior = MixturePrior(
-        J=J,
-        pi0=pi0,
-        init_means=means,
-        init_log_sigma2=math.log(init_sigma**2),
-    )
-
-    return prior
+            return model

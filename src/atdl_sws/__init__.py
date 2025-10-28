@@ -6,3 +6,11 @@ from .models.lenet_300 import lenet_300_100
 from .models.lenet_caffe import lenet_caffe
 from .visualizing import TrainingGifVisualizer
 from .csv_logger import CSVLogger
+from .util import (
+    setup_visualization_and_logging,
+    get_data_model_mappings,
+    evaluate_model,
+    setup_log,
+)
+from .prior import MixturePrior
+from .metrics import Metrics

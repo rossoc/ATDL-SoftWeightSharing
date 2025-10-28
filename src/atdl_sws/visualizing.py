@@ -188,9 +188,9 @@ class TrainingGifVisualizer:
         except Exception:
             pass
 
-        title = "Epoch: %d /%d" % (epoch, self.total_epochs or 0)
+        title = f"Epoch: {epoch} /{self.total_epochs or 0}"
         if test_acc is not None:
-            title += "\nTest accuracy: %.4f " % test_acc
+            title += f"\nTest accuracy: {test_acc:.4f} "
         if title_extra:
             title += f"\n{title_extra}"
 

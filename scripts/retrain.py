@@ -1,32 +1,14 @@
 from argparse import ArgumentParser
-from atdl_sws import lenet_caffe, lenet_300_100, ResNet, retraining, TrainingGifVisualizer, CSVLogger
 import os
-
-
-def create_model_and_dataset_mapping():
-    """Define the model, dataset, and class mappings."""
-    dataset = {
-        "lenet300": "mnist",
-        "lenet5": "mnist",
-        "cifar10": "cifar10",
-        "cifar100": "cifar100",
-    }
-
-    model_fn = {
-        "lenet300": lenet_300_100,
-        "lenet5": lenet_caffe,
-        "cifar10": ResNet,
-        "cifar100": ResNet,
-    }
-
-    n_classes = {
-        "lenet300": 10,
-        "lenet5": 10,
-        "cifar10": 10,
-        "cifar100": 100,
-    }
-    
-    return dataset, model_fn, n_classes
+from atdl_sws import (
+    MixturePrior,
+    Metrics,
+    retraining,
+    get_data_model_mappings,
+    setup_visualization_and_logging,
+    evaluate_model,
+    setup_log,
+)
 
 
 def parse_args():
@@ -35,21 +17,25 @@ def parse_args():
     ap.add_argument(
         "--model", choices=["lenet300", "lenet5", "cifar10", "cifar100"], required=True
     )
-    ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--save-dir", type=str, required=False, default=None)
-    ap.add_argument("--run-dir", type=str, required=False, default="./runs", help="Directory to save visualizations and logs")
     ap.add_argument("--visualize", action="store_true", help="Enable GIF visualization")
-    ap.add_argument("--framerate", type=float, default=2, help="Framerate for the visualization GIF")
-    ap.add_argument("--log", action="store_true", help="Enable CSV logging")
-
-    # Prior-specific arguments
     ap.add_argument(
-        "--prior-J", type=int, default=16, help="Number of mixture components"
+        "--framerate", type=float, default=2, help="Framerate for the visualization GIF"
     )
     ap.add_argument(
-        "--prior-pi0", type=float, default=0.99, help="Probability of zero component"
+        "--log", default="True", action="store_true", help="Enable CSV logging"
+    )
+
+    ap.add_argument(
+        "--prior-J", type=int, default=17, help="Number of mixture components"
+    )
+    ap.add_argument(
+        "--prior-pi0",
+        type=float,
+        default=0.99,
+        help="Probability of zero component (default 0.99)",
     )
     ap.add_argument(
         "--prior-init-sigma",
@@ -58,75 +44,94 @@ def parse_args():
         help="Initial sigma for mixture components",
     )
     ap.add_argument(
-        "--tau", type=float, default=0.005, help="Regularization coefficient"
+        "--tau",
+        type=float,
+        default=0.005,
+        help="Regularization coefficient default 0.005",
     )
 
-    # Learning rates for different parameters
     ap.add_argument(
-        "--lr-w", type=float, help="Learning rate for model weights (default: lr)"
+        "--lr-w",
+        type=float,
+        default=1e-4,
+        help="Learning rate for model weights (default: 0.0001)",
     )
     ap.add_argument(
-        "--lr-mu", type=float, help="Learning rate for means (default: lr*10)"
+        "--lr-mu",
+        type=float,
+        default=1e-4,
+        help="Learning rate for means (default: 0.0001)",
     )
     ap.add_argument(
-        "--lr-sigma", type=float, help="Learning rate for log_sigma2 (default: lr*100)"
+        "--lr-sigma",
+        type=float,
+        default=3e-3,
+        help="Learning rate for log_sigma2 (default: 0.003)",
     )
     ap.add_argument(
-        "--lr-pi", type=float, help="Learning rate for pi_logits (default: lr*100)"
+        "--lr-pi",
+        type=float,
+        default=3e-3,
+        help="Learning rate for pi_logits (default: 0.003)",
+    )
+    ap.add_argument(
+        "--prior-gamma-alpha",
+        type=float,
+        default=250,
+        help="Alpha of Inverse Gamma of j!=0 (default: 250)",
+    )
+    ap.add_argument(
+        "--prior-gamma-beta",
+        type=float,
+        default=0.1,
+        help="Beta of Inverse Gamma of j!=0 components (default: 0.1)",
+    )
+    ap.add_argument(
+        "--prior-gamma-alpha0",
+        type=float,
+        default=5000,
+        help="Alpha of Inverse Gamma of j=0 components (default: 5000)",
+    )
+    ap.add_argument(
+        "--prior-gamma-beta0",
+        type=float,
+        default=2.0,
+        help="Beta of Inverse Gamma of j=0 components (default: 2.0)",
     )
 
     return ap.parse_args()
 
 
-def setup_visualization_and_logging(args, model_name):
-    """Set up visualization and logging based on arguments."""
-    viz = None
-    logger = None
-    
-    # Create run directory
-    os.makedirs(args.run_dir, exist_ok=True)
-    
-    # Setup visualization if requested
-    if args.visualize:
-        viz = TrainingGifVisualizer(
-            out_dir=args.run_dir,
-            tag=f"{model_name}_retrain",
-            framerate=args.framerate
-        )
-    
-    # Setup logging if requested
-    if args.log:
-        logger = CSVLogger(
-            os.path.join(args.run_dir, f"{model_name}_retrain_log.csv"),
-            ["phase", "epoch", "train_ce", "complexity", "total_loss", "tau", "test_acc", "elapsed"]
-        )
-    
-    return viz, logger
-
-
 if __name__ == "__main__":
     # Parse arguments
     args = parse_args()
-    
+    setup_log(save_dir=args.save_dir)
+
     # Get model and dataset mappings
-    dataset_map, model_fn, n_classes = create_model_and_dataset_mapping()
-    
-    # Create the model
-    model = model_fn[args.model](num_classes=n_classes[args.model])
-    dataset = dataset_map[args.model]
+    (train_dataset, test_dataset), model = get_data_model_mappings(args.model)
+
+    pre_acc = evaluate_model(model, test_dataset)
 
     # Setup visualization and logging
     viz, logger = setup_visualization_and_logging(args, args.model)
-    
-    # Call the retraining function with visualization and logging support
+
+    prior = MixturePrior(
+        model,
+        J=args.prior_J,
+        pi0=args.prior_pi0,
+        init_log_sigma2=args.prior_init_sigma,
+        gamma_alpha=args.prior_gamma_alpha,
+        gamma_beta=args.prior_gamma_beta,
+        gamma_alpha0=args.prior_gamma_alpha0,
+        gamma_beta0=args.prior_gamma_beta0,
+    )
+
     retraining(
         model,
+        prior,
         args.epochs,
-        args.lr,
-        dataset,
-        prior_J=args.prior_J,
-        prior_pi0=args.prior_pi0,
-        prior_init_sigma=args.prior_init_sigma,
+        train_dataset,
+        eval=test_dataset,
         tau=args.tau,
         lr_w=args.lr_w,
         lr_mu=args.lr_mu,
@@ -136,5 +141,39 @@ if __name__ == "__main__":
         save_dir=args.save_dir,
         viz=viz,
         logger=logger,
-        run_dir=args.run_dir,
     )
+
+    # Get post-retraining accuracy
+    print("Evaluating model after retraining...")
+    post_acc = evaluate_model(model, test_dataset)
+    print(f"Post-retraining accuracy: {post_acc:.4f}")
+
+    # Store metrics after retraining
+    metrics = Metrics(
+        vars(args),
+        model,
+        save_dir=args.save_dir,
+        pre_acc=pre_acc,
+        post_acc=post_acc,
+    )
+
+    prior.merge_components()
+
+    prior.quantize_model(model, skip_last_matrix=True)
+    quant_acc = evaluate_model(model, test_dataset)
+
+    metrics.store_summary_metrics(
+        model=model,
+        pre_acc=pre_acc,
+        post_acc=post_acc,
+        quantized_acc=quant_acc,
+    )
+
+    metrics.store(args.save_dir)
+
+    # Save the quantized model
+    if args.save_dir:
+        model.save(os.path.join(args.save_dir, "quantized.keras"))
+        print(
+            f"Quantized model saved to {os.path.join(args.save_dir, 'quantized.keras')}"
+        )

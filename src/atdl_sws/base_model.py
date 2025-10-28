@@ -13,10 +13,8 @@ def pretraining(
     dataset,
     batch_size=64,
     save_dir=None,
-    viz=None,  # optional TrainingGifVisualizer
     logger=None,  # optional CSVLogger
     eval_every=1,  # how often to evaluate
-    run_dir=None,  # directory to save additional outputs
 ):
     """
     Pretrain a model with standard training.
@@ -28,10 +26,8 @@ def pretraining(
         dataset: Dataset name ("mnist", "cifar10", or "cifar100")
         batch_size: Batch size for training
         save_dir: Directory to save the pretrained model
-        viz: Optional TrainingGifVisualizer to create animated visualization
         logger: Optional CSVLogger to log metrics
         eval_every: How often to evaluate the model (default: every epoch)
-        run_dir: Directory to save additional outputs like mixture parameters
     """
     if dataset == "mnist":
         (x_train, y_train), (x_test, y_test) = get_mnist_data()
@@ -47,23 +43,6 @@ def pretraining(
     )
 
     model.summary()
-
-    # Prepare for visualization and logging
-    if viz is not None:
-        # Call on_train_begin with epoch 0
-        class DummyPrior:
-            """Dummy prior object to satisfy the visualizer interface"""
-
-            def mixture_params(self):
-                # Return dummy mixture parameters for visualization
-                return tf.constant([0.0]), tf.constant([1.0]), tf.constant([1.0])
-
-        # Initialize the visualizer with epoch 0
-        dummy_prior = DummyPrior()
-        viz.on_train_begin(model, dummy_prior, total_epochs=epochs)
-        # Evaluate initial accuracy
-        initial_accuracy = evaluate(model, (x_test, y_test))
-        viz.on_epoch_end(0, model, dummy_prior, test_acc=initial_accuracy)
 
     t0 = time.time()
 
@@ -103,17 +82,6 @@ def pretraining(
             test_acc = evaluate(model, (x_test, y_test))
 
         # Visualization hook
-        if viz is not None:
-
-            class DummyPrior:
-                """Dummy prior object to satisfy the visualizer interface"""
-
-                def mixture_params(self):
-                    # Return dummy mixture parameters for visualization
-                    return tf.constant([0.0]), tf.constant([1.0]), tf.constant([1.0])
-
-            dummy_prior = DummyPrior()
-            viz.on_epoch_end(epoch + 1, model, dummy_prior, test_acc=test_acc)
 
         # Log metrics if logger provided
         if logger is not None:
@@ -137,13 +105,8 @@ def pretraining(
             }
         )
 
-    # finalize GIF if viz is provided
-    if viz is not None:
-        gif_path = viz.on_train_end()
-        print(f"[viz] wrote GIF to: {gif_path}")
-
     if save_dir:
-        model.save(filepath=save_dir)
+        model.save(filepath=save_dir + "/pretrained.keras")
 
     return model
 

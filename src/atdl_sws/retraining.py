@@ -4,85 +4,65 @@ Keras implementation of retraining with mixture prior for soft weight sharing.
 This module provides functionality for retraining models with mixture prior regularization.
 """
 
+import os
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
-from .prior import init_mixture
-from .data import get_mnist_data, get_cifar10_data, get_cifar100_data
-from tqdm import trange
-from .visualizing import TrainingGifVisualizer
-from .csv_logger import CSVLogger, format_seconds
+from tqdm import tqdm
+from .csv_logger import format_seconds
+from .prior import flatten_weights
 import time
 
 
 def retraining(
     model,
+    prior,
     epochs,
-    learning_rate,
     dataset,
-    prior_J=16,
-    prior_pi0=0.99,
-    prior_init_sigma=0.25,
-    tau=0.005,
-    lr_w=None,  # Learning rate for model weights
-    lr_mu=None,  # Learning rate for means
-    lr_sigma=None,  # Learning rate for log_sigma2
-    lr_pi=None,  # Learning rate for pi_logits
-    batch_size=64,
+    lr_w=1e-4,  # Learning rate for model weights
+    lr_mu=1e-4,  # Learning rate for means
+    lr_sigma=3e-3,  # Learning rate for log_sigma2
+    lr_pi=3e-3,  # Learning rate for pi_logits
     save_dir=None,
+    tau=0.005,
+    batch_size=64,
     viz=None,  # optional TrainingGifVisualizer
     logger=None,  # optional CSVLogger
     eval_every=1,  # how often to evaluate
-    run_dir=None,  # directory to save additional outputs
-    **prior_kwargs,
+    eval=None,
 ):
     """
     Retrain a model with mixture prior regularization.
 
     Args:
         model: The Keras model to retrain
+        prior: The MixtureGaussian prior
         epochs: Number of training epochs
-        learning_rate: Base learning rate (used for model weights if lr_w not specified)
         dataset: Dataset name ("mnist", "cifar10", or "cifar100")
-        prior_J: Number of mixture components
-        prior_pi0: Probability of zero component in the prior
-        prior_init_sigma: Initial standard deviation for mixture components
         tau: Regularization coefficient for the prior
-        lr_w: Learning rate for model weights (default: learning_rate)
-        lr_mu: Learning rate for mixture means (default: learning_rate*10)
-        lr_sigma: Learning rate for log_sigma2 (default: learning_rate*100)
-        lr_pi: Learning rate for pi_logits (default: learning_rate*100)
+        lr_w: Learning rate for model weights
+        lr_mu: Learning rate for mixture means
+        lr_sigma: Learning rate for log_sigma2
+        lr_pi: Learning rate for pi_logits
         batch_size: Batch size for training
         save_dir: Directory to save the retrained model
         viz: Optional TrainingGifVisualizer to create animated visualization
         logger: Optional CSVLogger to log metrics
         eval_every: How often to evaluate the model (default: every epoch)
-        run_dir: Directory to save additional outputs like mixture parameters
         **prior_kwargs: Additional arguments to pass to MixturePrior
     """
-    # Load data
-    if dataset == "mnist":
-        (x_train, y_train), (x_test, y_test) = get_mnist_data()
-    elif dataset == "cifar10":
-        (x_train, y_train), (x_test, y_test) = get_cifar10_data()
-    elif dataset == "cifar100":
-        (x_train, y_train), (x_test, y_test) = get_cifar100_data()
-    else:
-        raise ValueError(f"Unsupported dataset: {dataset}")
+    x_train, y_train = dataset
 
-    # Initialize the mixture prior based on the model's current weights
-    prior = init_mixture(
-        model, J=prior_J, pi0=prior_pi0, init_sigma=prior_init_sigma, **prior_kwargs
-    )
-
+    if eval:
+        x_test, y_test = eval
     # Build the prior layer to initialize its variables
     # We need to build the layer to create the trainable variables before using them
-    dummy_weights = [tf.constant([[0.0]])]  # Dummy weights for building the layer
-    _ = prior(dummy_weights)
 
     # Set up separate optimizers for different parameters
-    lr_w = lr_w or learning_rate
-    lr_mu = lr_mu or learning_rate * 10
-    lr_sigma = lr_sigma or learning_rate * 100
-    lr_pi = lr_pi or learning_rate * 100
+    lr_w = lr_w
+    lr_mu = lr_mu
+    lr_sigma = lr_sigma
+    lr_pi = lr_pi
 
     model_optimizer = tf.keras.optimizers.Adam(learning_rate=lr_w)
     mu_optimizer = tf.keras.optimizers.Adam(learning_rate=lr_mu)
@@ -98,9 +78,13 @@ def retraining(
             err_loss = tf.keras.losses.categorical_crossentropy(y_batch, predictions)
 
             # Get model weights for the prior
-            model_weights = [layer for layer in model.layer if hasattr(layer, "kernel")]
+            model_weights = [
+                layer.kernel for layer in model.layers if hasattr(layer, "kernel")
+            ]
 
-            complex_loss = prior.complexity_loss(model_weights)
+            w_flatten = flatten_weights(model_weights)
+
+            complex_loss = prior.complexity_loss(w_flatten)
             total_loss = tf.reduce_mean(err_loss) + tau * complex_loss
 
         model_grads = tape.gradient(total_loss, model.trainable_variables)
@@ -124,31 +108,46 @@ def retraining(
 
     # --- Optional: epoch 0 visual frame & baseline accuracy
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=lr_w),
         loss="categorical_crossentropy",
         metrics=["accuracy"],
     )
-    test_accuracy = evaluate(model, (x_test, y_test))
-    if viz is not None:
-        viz.on_train_begin(model, prior, total_epochs=epochs)
-        viz.on_epoch_end(0, model, prior, test_acc=test_accuracy)
+
+    if eval:
+        _, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
+
+        if viz is not None:
+            viz.on_train_begin(model, prior, total_epochs=epochs)
+            viz.on_epoch_end(0, model, prior, test_acc=test_accuracy)
 
     # Training loop with tqdm
-    pbar = trange(epochs, desc="Retraining 0/0", leave=True)
     t0 = time.time()
 
-    for epoch in pbar:
+    for epoch in range(1, epochs + 1):
         epoch_total_loss = 0
         epoch_err_loss = 0
         epoch_complex_loss = 0
         num_batches = 0
 
-        for x_batch, y_batch in train_dataset:
+        pbar = tqdm(
+            train_dataset,
+            desc=f"Retraining {epoch}/{epochs}",
+            leave=True,
+        )
+        for x_batch, y_batch in pbar:
             total_loss, err_loss, complex_loss = train_step(x_batch, y_batch)
             epoch_total_loss += total_loss
             epoch_err_loss += tf.reduce_mean(err_loss)
             epoch_complex_loss += complex_loss
             num_batches += 1
+
+            pbar.set_postfix(
+                {
+                    "Total Loss": f"{float(tf.reduce_mean(total_loss).numpy()):.4f}",
+                    "Err Loss": f"{float(tf.reduce_mean(err_loss).numpy()):.4f}",
+                    "Complex Loss": f"{float(tf.reduce_mean(complex_loss).numpy()):.4f}",
+                }
+            )
 
         avg_total_loss = tf.reduce_mean(epoch_total_loss / num_batches)
         avg_err_loss = tf.reduce_mean(epoch_err_loss / num_batches)
@@ -156,22 +155,11 @@ def retraining(
 
         # Evaluate model if needed
         test_acc = None
-        if eval_every > 0 and (epoch + 1) % eval_every == 0:
-            test_acc = evaluate(model, (x_test, y_test))
+        if eval and eval_every > 0 and (epoch + 1) % eval_every == 0:
+            _, test_acc = model.evaluate(x_test, y_test, verbose=0)
 
-        # --- GIF frame
         if viz is not None:
             viz.on_epoch_end(epoch + 1, model, prior, test_acc=test_acc)
-
-        # Update progress bar with losses
-        pbar.set_description(f"Retraining {epoch + 1}/{epochs}")
-        pbar.set_postfix(
-            {
-                "Total Loss": f"{float(avg_total_loss.numpy()):.4f}",
-                "Err Loss": f"{float(avg_err_loss.numpy()):.4f}",
-                "Complex Loss": f"{float(avg_complex_loss.numpy()):.4f}",
-            }
-        )
 
         # Log metrics if logger provided
         if logger is not None:
@@ -182,7 +170,6 @@ def retraining(
                     "train_ce": float(avg_err_loss.numpy()),
                     "complexity": float(avg_complex_loss.numpy()),
                     "total_loss": float(avg_total_loss.numpy()),
-                    "tau": tau,
                     "test_acc": ("" if test_acc is None else f"{test_acc:.4f}"),
                     "elapsed": format_seconds(time.time() - t0),
                 }
@@ -194,26 +181,13 @@ def retraining(
         print(f"[viz] wrote GIF to: {gif_path}")
 
     # Evaluate the retrained model
-    test_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
-    print(f"Test accuracy after retraining with prior: {test_accuracy:.4f}")
+    if eval:
+        _, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
+        print(f"Test accuracy after retraining with prior: {test_accuracy:.4f}")
 
     # Save the retrained model
     if save_dir:
-        model.save(filepath=save_dir)
+        model.save(filepath=save_dir + "/retrained.keras")
         print(f"Retrained model saved to {save_dir}")
 
     return model
-
-
-def evaluate(model, test_data):
-    """
-    Evaluate the model on test data.
-    Args:
-        model: The Keras model to evaluate
-        test_data: Tuple of (x_test, y_test)
-    Returns:
-        test_accuracy: The accuracy of the model on test data
-    """
-    x_test, y_test = test_data
-    _, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
-    return test_accuracy
