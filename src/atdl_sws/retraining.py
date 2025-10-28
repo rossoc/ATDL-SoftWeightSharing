@@ -107,13 +107,6 @@ def retraining(
     train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
     train_dataset = train_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
-    # --- Optional: epoch 0 visual frame & baseline accuracy
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=lr_w),
-        loss="categorical_crossentropy",
-        metrics=["accuracy"],
-    )
-
     if eval:
         _, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
 
