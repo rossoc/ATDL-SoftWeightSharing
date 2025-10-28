@@ -10,10 +10,12 @@ readme = "README.md"
 requires-python = ">=3.12.9"
 dependencies = [
     "matplotlib>=3.10.7",
+    "seaborn>=0.13.0",
     "tensorflow>=2.20.0",
     "tqdm>=4.66.0",
     "pillow>=10.0.0",
     "imageio>=2.9.0",
+    "ipython>=9.6.0",
 ]
 
 [project.optional-dependencies]

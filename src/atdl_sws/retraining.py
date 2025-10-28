@@ -8,6 +8,9 @@ import tensorflow as tf
 from .prior import init_mixture
 from .data import get_mnist_data, get_cifar10_data, get_cifar100_data
 from tqdm import trange
+from .visualizing import TrainingGifVisualizer
+from .csv_logger import CSVLogger, format_seconds
+import time
 
 
 def retraining(
@@ -25,6 +28,10 @@ def retraining(
     lr_pi=None,  # Learning rate for pi_logits
     batch_size=64,
     save_dir=None,
+    viz=None,  # optional TrainingGifVisualizer
+    logger=None,  # optional CSVLogger
+    eval_every=1,  # how often to evaluate
+    run_dir=None,  # directory to save additional outputs
     **prior_kwargs,
 ):
     """
@@ -45,6 +52,10 @@ def retraining(
         lr_pi: Learning rate for pi_logits (default: learning_rate*100)
         batch_size: Batch size for training
         save_dir: Directory to save the retrained model
+        viz: Optional TrainingGifVisualizer to create animated visualization
+        logger: Optional CSVLogger to log metrics
+        eval_every: How often to evaluate the model (default: every epoch)
+        run_dir: Directory to save additional outputs like mixture parameters
         **prior_kwargs: Additional arguments to pass to MixturePrior
     """
     # Load data
@@ -79,7 +90,7 @@ def retraining(
     pi_optimizer = tf.keras.optimizers.Adam(learning_rate=lr_pi)
 
     # Define training step with custom gradients
-    @tf.function
+    @tf.function(jit_compile=True)
     def train_step(x_batch, y_batch):
         with tf.GradientTape(persistent=True) as tape:
             # Compute model predictions
@@ -87,12 +98,7 @@ def retraining(
             err_loss = tf.keras.losses.categorical_crossentropy(y_batch, predictions)
 
             # Get model weights for the prior
-            model_weights = []
-            for layer in model.layers:
-                if hasattr(layer, "kernel"):  # Dense, Conv2D layers
-                    model_weights.append(layer.kernel)
-                if hasattr(layer, "bias") and layer.bias is not None:
-                    model_weights.append(layer.bias)
+            model_weights = [layer for layer in model.layer if hasattr(layer, "kernel")]
 
             complex_loss = prior.complexity_loss(model_weights)
             total_loss = tf.reduce_mean(err_loss) + tau * complex_loss
@@ -116,8 +122,20 @@ def retraining(
     train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
     train_dataset = train_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
+    # --- Optional: epoch 0 visual frame & baseline accuracy
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+        loss="categorical_crossentropy",
+        metrics=["accuracy"],
+    )
+    test_accuracy = evaluate(model, (x_test, y_test))
+    if viz is not None:
+        viz.on_train_begin(model, prior, total_epochs=epochs)
+        viz.on_epoch_end(0, model, prior, test_acc=test_accuracy)
+
     # Training loop with tqdm
     pbar = trange(epochs, desc="Retraining 0/0", leave=True)
+    t0 = time.time()
 
     for epoch in pbar:
         epoch_total_loss = 0
@@ -136,6 +154,15 @@ def retraining(
         avg_err_loss = tf.reduce_mean(epoch_err_loss / num_batches)
         avg_complex_loss = tf.reduce_mean(epoch_complex_loss / num_batches)
 
+        # Evaluate model if needed
+        test_acc = None
+        if eval_every > 0 and (epoch + 1) % eval_every == 0:
+            test_acc = evaluate(model, (x_test, y_test))
+
+        # --- GIF frame
+        if viz is not None:
+            viz.on_epoch_end(epoch + 1, model, prior, test_acc=test_acc)
+
         # Update progress bar with losses
         pbar.set_description(f"Retraining {epoch + 1}/{epochs}")
         pbar.set_postfix(
@@ -146,12 +173,25 @@ def retraining(
             }
         )
 
-    # Compile the model with standard optimizer after training for evaluation
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-        loss="categorical_crossentropy",
-        metrics=["accuracy"],
-    )
+        # Log metrics if logger provided
+        if logger is not None:
+            logger.log(
+                {
+                    "phase": "retrain",
+                    "epoch": epoch + 1,
+                    "train_ce": float(avg_err_loss.numpy()),
+                    "complexity": float(avg_complex_loss.numpy()),
+                    "total_loss": float(avg_total_loss.numpy()),
+                    "tau": tau,
+                    "test_acc": ("" if test_acc is None else f"{test_acc:.4f}"),
+                    "elapsed": format_seconds(time.time() - t0),
+                }
+            )
+
+    # finalize GIF
+    if viz is not None:
+        gif_path = viz.on_train_end()
+        print(f"[viz] wrote GIF to: {gif_path}")
 
     # Evaluate the retrained model
     test_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
@@ -163,3 +203,17 @@ def retraining(
         print(f"Retrained model saved to {save_dir}")
 
     return model
+
+
+def evaluate(model, test_data):
+    """
+    Evaluate the model on test data.
+    Args:
+        model: The Keras model to evaluate
+        test_data: Tuple of (x_test, y_test)
+    Returns:
+        test_accuracy: The accuracy of the model on test data
+    """
+    x_test, y_test = test_data
+    _, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
+    return test_accuracy
