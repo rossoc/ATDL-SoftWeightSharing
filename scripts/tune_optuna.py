@@ -125,6 +125,8 @@ def objective(
         gamma_beta0=prior_gamma_beta0,
     )
 
+    prior.initialize_weights_from_mixture(model)
+
     # Setup visualization and logging
     args_for_viz = argparse.Namespace(
         **vars(fixed_args),
