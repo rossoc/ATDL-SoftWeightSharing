@@ -94,10 +94,7 @@ class MixturePrior(layers.Layer):
 
         weights = [layer.kernel for layer in model.layers if hasattr(layer, "kernel")]
 
-        flattened_weights = np.array(flatten_weights(weights))
-
-        wmin, wmax = np.min(flattened_weights), np.max(flattened_weights)
-        self.init_means = np.linspace(wmin, wmax, J - 1)
+        self.init_means = np.linspace(-0.6, 0.6, J - 1)
 
         _ = self(weights)
 
