@@ -21,8 +21,8 @@ import absl.logging
 
 
 def setup_log(save_dir=None):
-    print(save_dir)
     if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",

@@ -131,14 +131,11 @@ class MixturePrior(layers.Layer):
 
     def mixture_params(
         self,
-        mu=None,
-        log_sigma2=None,
-        pi_logits: Optional[tf.Variable] = None,
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
         """Get the current mixture parameters: (means, variances, mixing proportions). Can accept parameters directly or use layer's parameters."""
-        mu_param = mu or self.mu
-        log_sigma2_param = log_sigma2 or self.log_sigma2
-        pi_logits_param = pi_logits or self.pi_logits
+        mu_param = self.mu
+        log_sigma2_param = self.log_sigma2
+        pi_logits_param = self.pi_logits
 
         pi_nonzero = tf.nn.softmax(pi_logits_param)
 
@@ -341,3 +338,50 @@ class MixturePrior(layers.Layer):
             quantized_values = quantized_flat.reshape(weight_values.shape)
             weight_tensor.assign(quantized_values)
             return model
+
+    def initialize_weights_from_mixture(self, model):
+        """
+        Initialize model weights by sampling from the current mixture of Gaussians distribution.
+
+        Args:
+            model: The Keras model whose weights will be initialized
+        """
+        mu, sigma2, pi = self.mixture_params()
+
+        mu_np = mu.numpy()  # type: ignore
+        sigma2_np = sigma2.numpy()  # type: ignore
+        pi_np = pi.numpy()  # type: ignore
+
+        weight_layers = []
+        for layer in model.layers:
+            if hasattr(layer, "kernel"):  # Dense, Conv2D layers
+                weight_layers.append((layer, "kernel"))
+            elif hasattr(layer, "weights") and len(layer.weights) > 0:
+                for i, w in enumerate(layer.weights):
+                    if "kernel" in w.name or "weight" in w.name:
+                        weight_layers.append((layer, i))
+
+        for layer, param_name in weight_layers:
+            if isinstance(param_name, str):
+                weight_tensor = getattr(layer, param_name)
+            else:
+                weight_tensor = layer.weights[param_name]
+
+            weight_shape = weight_tensor.shape
+            n_weights = tf.reduce_prod(weight_shape)
+
+            # Sample component assignments based on mixing proportions
+            component_indices = np.random.choice(
+                len(pi_np), size=int(n_weights), p=pi_np
+            )
+
+            # Sample from the selected components
+            samples = np.zeros(int(n_weights))
+            for i, comp_idx in enumerate(component_indices):
+                samples[i] = np.random.normal(
+                    loc=mu_np[comp_idx], scale=np.sqrt(sigma2_np[comp_idx])
+                )
+
+            # Reshape to original weight shape and assign
+            sampled_weights = samples.reshape(weight_shape)
+            weight_tensor.assign(sampled_weights)
