@@ -13,6 +13,7 @@ from atdl_sws import (
     setup_visualization_and_logging,
     evaluate_model,
     setup_log,
+    Metrics,
     sparsity,
     lenet_caffe,
     lenet_300_100,
@@ -140,7 +141,9 @@ def objective(
         prior_gamma_beta0=prior_gamma_beta0,
     )
 
-    viz, logger = setup_visualization_and_logging(args_for_viz, fixed_args.model)
+    viz, logger, metrics = setup_visualization_and_logging(
+        args_for_viz, fixed_args.model
+    )
 
     # Perform retraining
     try:
@@ -155,7 +158,7 @@ def objective(
             lr_sigma=lr_sigma,
             lr_pi=lr_pi,
             batch_size=batch_size,
-            save_dir=fixed_args.save_dir,
+            save_dir=fixed_args.save_dir + "/t" + str(trial._trial_id),
             viz=viz,
             logger=logger,
             verbose=0,
@@ -165,14 +168,18 @@ def objective(
         # Return worst-case values to penalize this trial
         return float("inf"), 0.0  # High accuracy loss, no sparsity
 
+    pre_acc = evaluate_model(model, test_dataset)
     # Evaluate post-retraining accuracy
-    prior.quantize_model(model, skip_last_matrix=True)
-    acc_loss = evaluate_model(model, test_dataset)
+    model = prior.quantize_model(model, skip_last_matrix=True)
+    acc_loss, post_acc = model.evaluate(test_dataset[0], test_dataset[1], verbose=0)
 
     # Calculate sparsity (|W=0|/|W|)
     sparsity_ratio = sparsity(model)
 
-    # Return dual objectives: minimize accuracy loss, maximize sparsity
+    metrics.store_summary_metrics(model, pre_acc=pre_acc, post_acc=post_acc)
+
+    metrics.store(fixed_args.save_dir + "/t" + str(trial._trial_id))
+
     return acc_loss, sparsity_ratio
 
 

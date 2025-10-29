@@ -28,23 +28,23 @@ class Metrics:
     def __init__(
         self,
         args,
-        model,
-        save_dir,
+        model=None,
         pre_acc=None,
         post_acc=None,
         quantized_acc=None,
     ):
         self.retraining_args = args
         self.store_environment()
-        self.store_environment()
-        self.store_layer_pruning(model)
+
+        if model:
+            self.store_layer_pruning(model)
 
         if quantized_acc:
             self.store_summary_metrics(
                 model, pre_acc, post_acc, acc_quantized=quantized_acc
             )
 
-        self.save_dir = save_dir
+        self.layer_pruning_data = {}
         self.plot_data = {}
 
     def _create_figure(
@@ -142,8 +142,8 @@ class Metrics:
             "Delta[%]": delta_err,
             "|W|": int(total_params),
             "|W_nonzero|/|W|[%]": float(nz_pct),
-            "acc_pretrain": float(pre_acc),
-            "acc_retrain": float(post_acc),
+            "acc_retrain": float(pre_acc),
+            "acc_quantized": float(post_acc),
         }
 
         # Add any additional metrics passed in kwargs
@@ -699,7 +699,7 @@ class Metrics:
         fig.savefig(out)
         plt.close(fig)
 
-    def store(self, dir_name: str) -> str:
+    def store(self, dir_name: str):
         """
         Store all collected metrics and data to the specified directory.
 

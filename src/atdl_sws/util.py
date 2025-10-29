@@ -1,19 +1,23 @@
-from atdl_sws import (
-    lenet_caffe,
-    lenet_300_100,
-    ResNet,
-    TrainingGifVisualizer,
-    CSVLogger,
+from .data import (
     get_mnist_data,
     get_cifar10_data,
     get_cifar100_data,
 )
 
+from .models import (
+    lenet_caffe,
+    lenet_300_100,
+    ResNet,
+)
+
+from .visualizing import TrainingGifVisualizer
+from .csv_logger import CSVLogger
+from .metrics import Metrics
+
 import logging
 import sys
 import os
 import absl.logging
-import tensorflow as tf
 
 
 def setup_log(save_dir=None):
@@ -108,7 +112,9 @@ def setup_visualization_and_logging(args, model_name, mode="retraining"):
             ],
         )
 
-    return viz, logger
+    metrics = Metrics(vars(args))
+
+    return viz, logger, metrics
 
 
 def sparsity(model):

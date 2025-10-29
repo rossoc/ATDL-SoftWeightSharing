@@ -113,7 +113,7 @@ if __name__ == "__main__":
     pre_acc = evaluate_model(model, test_dataset)
 
     # Setup visualization and logging
-    viz, logger = setup_visualization_and_logging(args, args.model)
+    viz, logger, metrics = setup_visualization_and_logging(args, args.model)
 
     prior = MixturePrior(
         model,
@@ -148,20 +148,12 @@ if __name__ == "__main__":
     post_acc = evaluate_model(model, test_dataset)
     print(f"Post-retraining accuracy: {post_acc:.4f}")
 
-    # Store metrics after retraining
-    metrics = Metrics(
-        vars(args),
-        model,
-        save_dir=args.save_dir,
-        pre_acc=pre_acc,
-        post_acc=post_acc,
-    )
-
     prior.merge_components()
 
     prior.quantize_model(model, skip_last_matrix=True)
     quant_acc = evaluate_model(model, test_dataset)
 
+    metrics.store_layer_pruning(model)
     metrics.store_summary_metrics(
         model=model,
         pre_acc=pre_acc,

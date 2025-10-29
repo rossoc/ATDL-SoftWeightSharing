@@ -185,9 +185,4 @@ def retraining(
         _, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
         print(f"Test accuracy after retraining with prior: {test_accuracy:.4f}")
 
-    # Save the retrained model
-    if save_dir:
-        model.save(filepath=save_dir + "/retrained.keras")
-        print(f"Retrained model saved to {save_dir}")
-
     return model
