@@ -90,19 +90,19 @@ def objective(
     2. Maximize sparsity (|W=0|/|W|)
     """
     # Sample hyperparameters to optimize
-    tau = trial.suggest_float("tau", 1e-6, 1e-2, log=True)
-    lr_w = trial.suggest_float("lr_w", 1e-5, 5e-2, log=True)
-    lr_mu = trial.suggest_float("lr_mu", 1e-5, 1e-2, log=True)
+    tau = trial.suggest_float("tau", 1e-6, 6e-3, log=True)
+    lr_w = trial.suggest_float("lr_w", 1e-5, 1e-3, log=True)
+    lr_mu = trial.suggest_float("lr_mu", 1e-5, 5e-3, log=True)
     lr_sigma = trial.suggest_float("lr_sigma", 1e-5, 1e-2, log=True)
-    lr_pi = trial.suggest_float("lr_pi", 1e-5, 1e-2, log=True)
+    lr_pi = trial.suggest_float("lr_pi", 1e-5, 5e-3, log=True)
 
     # Prior parameters
-    prior_pi0 = trial.suggest_float("prior_pi0", 0.8, 0.999)
-    prior_init_sigma = trial.suggest_float("prior_init_sigma", 0.1, 0.5)
-    prior_gamma_alpha = trial.suggest_float("prior_gamma_alpha", 100, 1e5)
-    prior_gamma_beta = trial.suggest_float("prior_gamma_beta", 1e-2, 100)
-    prior_gamma_alpha0 = trial.suggest_float("prior_gamma_alpha0", 100, 1e5)
-    prior_gamma_beta0 = trial.suggest_float("prior_gamma_beta0", 1e-2, 20)
+    prior_pi0 = trial.suggest_float("prior_pi0", 0.85, 0.999)
+    prior_init_sigma = trial.suggest_float("prior_init_sigma", -1 * 1e-2, 0.5)
+    prior_gamma_alpha = trial.suggest_float("prior_gamma_alpha", 1e4, 1e5)
+    prior_gamma_beta = trial.suggest_float("prior_gamma_beta", 1, 100)
+    prior_gamma_alpha0 = trial.suggest_float("prior_gamma_alpha0", 1e4, 1e5)
+    prior_gamma_beta0 = trial.suggest_float("prior_gamma_beta0", 5.0, 20.0)
 
     # Fixed parameters that don't change
     prior_J = fixed_args.prior_J or 17
