@@ -10,7 +10,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 from tqdm import tqdm
 from .csv_logger import format_seconds
-from .prior import flatten_weights
+from .visualizing import flatten_weights
 import time
 
 
@@ -78,12 +78,7 @@ def retraining(
             predictions = model(x_batch, training=True)
             err_loss = tf.keras.losses.categorical_crossentropy(y_batch, predictions)
 
-            # Get model weights for the prior
-            model_weights = [
-                layer.kernel for layer in model.layers if hasattr(layer, "kernel")
-            ]
-
-            w_flatten = flatten_weights(model_weights)
+            w_flatten = flatten_weights(model)
 
             complex_loss = prior.complexity_loss(w_flatten)
             total_loss = tf.reduce_mean(err_loss) + tau * complex_loss
@@ -123,14 +118,10 @@ def retraining(
         epoch_complex_loss = 0
         num_batches = 0
 
-        pbar = (
-            tqdm(
-                train_dataset,
-                desc=f"Retraining {epoch}/{epochs}",
-                leave=True,
-            )
-            if verbose > 0
-            else train_dataset
+        pbar = tqdm(
+            train_dataset,
+            desc=f"Retraining {epoch}/{epochs}",
+            leave=True,
         )
 
         for x_batch, y_batch in pbar:
@@ -140,14 +131,13 @@ def retraining(
             epoch_complex_loss += complex_loss
             num_batches += 1
 
-            if verbose > 0:
-                pbar.set_postfix(
-                    {
-                        "Total Loss": f"{float(tf.reduce_mean(total_loss).numpy()):.4f}",
-                        "Err Loss": f"{float(tf.reduce_mean(err_loss).numpy()):.4f}",
-                        "Complex Loss": f"{float(tf.reduce_mean(complex_loss).numpy()):.4f}",
-                    }
-                )
+            pbar.set_postfix(
+                {
+                    "Total Loss": f"{float(tf.reduce_mean(total_loss).numpy()):.4f}",
+                    "Err Loss": f"{float(tf.reduce_mean(err_loss).numpy()):.4f}",
+                    "Complex Loss": f"{float(tf.reduce_mean(complex_loss).numpy()):.4f}",
+                }
+            )
 
         avg_total_loss = tf.reduce_mean(epoch_total_loss / num_batches)
         avg_err_loss = tf.reduce_mean(epoch_err_loss / num_batches)

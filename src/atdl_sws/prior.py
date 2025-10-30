@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 from keras import layers
 from typing import List, Tuple, Optional
+from .visualizing import flatten_weights
 
 
 def logsumexp(x, axis=-1):
@@ -19,17 +20,6 @@ def logsumexp(x, axis=-1):
     return tf.squeeze(m, axis=axis) + tf.math.log(
         tf.reduce_sum(tf.exp(x - m), axis=axis)
     )
-
-
-def flatten_weights(model_weights):
-    flattened_weights = []
-    for W in model_weights:
-        if len(W.shape) > 0:
-            flattened_weights = tf.concat(
-                [flattened_weights, tf.reshape(W, [-1])], axis=0
-            )
-
-    return flattened_weights
 
 
 def hyperprior(alpha, beta, lam):
@@ -92,7 +82,7 @@ class MixturePrior(layers.Layer):
         self.eps = 1e-8
         self.init_log_sigma2 = init_log_sigma2
 
-        weights = [layer.kernel for layer in model.layers if hasattr(layer, "kernel")]
+        weights = flatten_weights(model)
 
         self.init_means = np.linspace(-0.6, 0.6, J - 1)
 
@@ -195,12 +185,11 @@ class MixturePrior(layers.Layer):
 
         return total_loss
 
-    def call(self, inputs: List[tf.Variable]):
+    def call(self, inputs: list[tf.Tensor]):
         """
         Computes the complexity loss and adds it to the layer's losses.
         """
-        w_flat = flatten_weights(inputs)
-        complexity_loss = self.complexity_loss(w_flat)
+        complexity_loss = self.complexity_loss(inputs)
         self.add_loss(complexity_loss)
         return inputs[0]
 

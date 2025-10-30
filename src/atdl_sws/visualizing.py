@@ -15,19 +15,13 @@ import seaborn as sns
 import tensorflow as tf
 
 
-def flatten_weights(model) -> np.ndarray:
-    """
-    Flatten all collected weight parameters from a Keras model.
-    """
-    vecs = [
-        tf.reshape(layer.kernel, [-1]).numpy()
-        for layer in model.layers
-        if hasattr(layer, "kernel")
-    ]
-
-    if not vecs:
-        raise Exception("Error lattening the weights")
-    return np.concatenate(vecs, axis=0)
+def flatten_weights(model) -> tf.Tensor:
+    """Return every trainable weight of `model` as one 1-D tensor."""
+    flats = [
+        tf.reshape(v, [-1])  # flatten each matrix / vector
+        for v in model.trainable_variables
+    ]  # every kernel, bias, …
+    return tf.concat(flats, axis=0)
 
 
 class TrainingGifVisualizer:
@@ -147,8 +141,8 @@ class TrainingGifVisualizer:
 
         sns.set(style="whitegrid", rc={"figure.figsize": (8, 8)})
         g = sns.jointplot(
-            x=w0[I],
-            y=wT[I],
+            x=tf.gather(w0, I),
+            y=tf.gather(wT, I),
             height=8,
             kind="scatter",
             color="g",
