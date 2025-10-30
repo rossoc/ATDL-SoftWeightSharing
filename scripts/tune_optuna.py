@@ -103,6 +103,7 @@ def objective(
     prior_gamma_beta = trial.suggest_float("prior_gamma_beta", 1, 100)
     prior_gamma_alpha0 = trial.suggest_float("prior_gamma_alpha0", 1e4, 1e5)
     prior_gamma_beta0 = trial.suggest_float("prior_gamma_beta0", 5.0, 20.0)
+    weight_decay = trial.suggest_float("weight_decay", 0.0, 0.5)
 
     # Fixed parameters that don't change
     prior_J = fixed_args.prior_J or 17
@@ -125,8 +126,6 @@ def objective(
         gamma_beta0=prior_gamma_beta0,
     )
 
-    prior.initialize_weights_from_mixture(model)
-
     # Setup visualization and logging
     args_for_viz = argparse.Namespace(
         **vars(fixed_args),
@@ -141,6 +140,7 @@ def objective(
         prior_gamma_beta=prior_gamma_beta,
         prior_gamma_alpha0=prior_gamma_alpha0,
         prior_gamma_beta0=prior_gamma_beta0,
+        weight_decay=weight_decay,
     )
 
     viz, logger, metrics = setup_visualization_and_logging(
@@ -164,6 +164,7 @@ def objective(
             viz=viz,
             logger=logger,
             verbose=0,
+            weight_decay=weight_decay,
         )
     except Exception as e:
         print(f"Error during retraining: {e}")
