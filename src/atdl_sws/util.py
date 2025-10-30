@@ -7,7 +7,7 @@ from .data import (
 from .models import (
     lenet_caffe,
     lenet_300_100,
-    ResNet,
+    resnet,
 )
 
 from .visualizing import TrainingGifVisualizer
@@ -69,8 +69,8 @@ def get_data_model_mappings(model_name):
     model_fn = {
         "lenet300": lenet_300_100,
         "lenet5": lenet_caffe,
-        "cifar10": ResNet,
-        "cifar100": ResNet,
+        "cifar10": resnet,
+        "cifar100": resnet,
     }
 
     n_classes = {
