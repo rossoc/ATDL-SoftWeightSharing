@@ -98,7 +98,7 @@ def objective(
 
     # Prior parameters
     prior_pi0 = trial.suggest_float("prior_pi0", 0.85, 0.999)
-    prior_init_sigma = trial.suggest_float("prior_init_sigma", -1 * 1e-2, 0.5)
+    prior_init_sigma = trial.suggest_float("prior_init_sigma", -1 * 1e2, 0.5)
     prior_gamma_alpha = trial.suggest_float("prior_gamma_alpha", 1e4, 1e5)
     prior_gamma_beta = trial.suggest_float("prior_gamma_beta", 1, 100)
     prior_gamma_alpha0 = trial.suggest_float("prior_gamma_alpha0", 1e4, 1e5)
