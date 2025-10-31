@@ -176,7 +176,7 @@ def objective(
     pre_acc = evaluate_model(model, test_dataset)
     # Evaluate post-retraining accuracy
     model = prior.quantize_model(model, skip_last_matrix=True)
-    acc_loss, post_acc = model.evaluate(test_dataset[0], test_dataset[1], verbose=0)
+    post_acc = evaluate_model(model, test_dataset)
 
     # Calculate sparsity (|W=0|/|W|)
     sparsity_ratio = sparsity(model)
@@ -185,7 +185,7 @@ def objective(
 
     metrics.store(fixed_args.save_dir + "/t" + str(trial._trial_id))
 
-    return acc_loss, sparsity_ratio
+    return 1 - post_acc, sparsity_ratio
 
 
 def parse_args():
