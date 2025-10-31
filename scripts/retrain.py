@@ -110,6 +110,12 @@ def parse_args():
         default=0.1,
         help="Model's regularizer (default: 0.1)",
     )
+    ap.add_argument(
+        "--std-init",
+        type=float,
+        default=0.001,
+        help="Model's regularizer (default: 0.001)",
+    )
 
     return ap.parse_args()
 
@@ -121,7 +127,7 @@ if __name__ == "__main__":
 
     # Get model and dataset mappings
     (train_dataset, test_dataset), model = get_data_model_mappings(
-        args.model, args.regularizer
+        args.model, args.regularizer, std_init=args.std_init
     )
 
     pre_acc = evaluate_model(model, test_dataset)

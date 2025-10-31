@@ -4,7 +4,7 @@ from tensorflow.keras.regularizers import L1
 from tensorflow.keras.initializers import RandomNormal
 
 
-def lenet_300_100(num_classes=10, regularizer=0, std_init=0.01):
+def lenet_300_100(num_classes=10, regularizer=1e-1, std_init=0.01):
     gaussian_init = RandomNormal(mean=0.0, stddev=std_init)
     model = Sequential(
         [

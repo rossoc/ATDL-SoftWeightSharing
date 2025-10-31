@@ -57,7 +57,7 @@ def evaluate_model(model, dataset):
     return test_accuracy
 
 
-def get_data_model_mappings(model_name, regularizer=0):
+def get_data_model_mappings(model_name, regularizer=1e-2, std_init=1e-10):
     """Define the model, dataset, and class mappings."""
     dataset_fn = {
         "lenet300": get_mnist_data,
@@ -81,7 +81,7 @@ def get_data_model_mappings(model_name, regularizer=0):
     }
 
     return dataset_fn[model_name](), model_fn[model_name](
-        num_classes=n_classes[model_name], regularizer=regularizer
+        num_classes=n_classes[model_name], regularizer=regularizer, std_init=std_init
     )
 
 
