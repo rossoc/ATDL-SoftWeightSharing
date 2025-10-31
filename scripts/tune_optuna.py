@@ -68,9 +68,9 @@ class DataModelProvider:
         """Returns (x_train, y_train), (x_test, y_test)"""
         return self._train_data, self._test_data
 
-    def get_model(self):
+    def get_model(self, regularizer):
         """Returns a brand new model with the needed features"""
-        return self._model_fn(num_classes=self._n_classes)
+        return self._model_fn(num_classes=self._n_classes, regularizer=regularizer)
 
 
 def _now_tag() -> str:
@@ -104,6 +104,7 @@ def objective(
     prior_gamma_alpha0 = trial.suggest_float("prior_gamma_alpha0", 1e4, 1e5)
     prior_gamma_beta0 = trial.suggest_float("prior_gamma_beta0", 5.0, 20.0)
     weight_decay = trial.suggest_float("weight_decay", 0.0, 0.5)
+    l2_term = trial.suggest_float("l2_term", 0.0, 0.5)
 
     # Fixed parameters that don't change
     prior_J = fixed_args.prior_J or 17
@@ -112,7 +113,7 @@ def objective(
 
     # Get dataset and model from the provider (not downloaded again)
     train_dataset, test_dataset = data_provider.get_data()
-    model = data_provider.get_model()
+    model = data_provider.get_model(l2_term)
 
     # Initialize prior with sampled parameters
     prior = MixturePrior(
@@ -141,6 +142,7 @@ def objective(
         prior_gamma_alpha0=prior_gamma_alpha0,
         prior_gamma_beta0=prior_gamma_beta0,
         weight_decay=weight_decay,
+        l2_term=l2_term,
     )
 
     viz, logger, metrics = setup_visualization_and_logging(

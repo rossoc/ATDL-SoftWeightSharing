@@ -98,6 +98,18 @@ def parse_args():
         default=2.0,
         help="Beta of Inverse Gamma of j=0 components (default: 2.0)",
     )
+    ap.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.1,
+        help="Model's weight decay (default: 0.00001)",
+    )
+    ap.add_argument(
+        "--regularizer",
+        type=float,
+        default=0.1,
+        help="Model's regularizer (default: 0.1)",
+    )
 
     return ap.parse_args()
 
@@ -108,7 +120,9 @@ if __name__ == "__main__":
     setup_log(save_dir=args.save_dir)
 
     # Get model and dataset mappings
-    (train_dataset, test_dataset), model = get_data_model_mappings(args.model)
+    (train_dataset, test_dataset), model = get_data_model_mappings(
+        args.model, args.regularizer
+    )
 
     pre_acc = evaluate_model(model, test_dataset)
 
@@ -141,6 +155,7 @@ if __name__ == "__main__":
         save_dir=args.save_dir,
         viz=viz,
         logger=logger,
+        weight_decay=args.weight_decay,
     )
 
     # Get post-retraining accuracy

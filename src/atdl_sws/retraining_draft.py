@@ -1,7 +1,6 @@
 import tensorflow as tf
 from prior import MixturePrior
 from models import lenet_300_100
-import keras
 from data import get_mnist_data
 
 J = 17
@@ -16,7 +15,7 @@ lr_pi = 1e-2
 
 prior = MixturePrior(J, pi0, init_means)
 model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=lr_w),
+    optimizer=tf.keras.optimizers.Adam(learning_rate=lr_w),
     loss="categorical_crossentropy",
     metrics=["accuracy"],
 )
@@ -28,16 +27,16 @@ for layer in model.layers:
 
 prior(model_weights)
 
-model_optimizer = keras.optimizers.Adam(learning_rate=lr_w)
-mu_optimizer = keras.optimizers.Adam(learning_rate=lr_mu)
-sigma_optimizer = keras.optimizers.Adam(learning_rate=lr_sigma)
-pi_optimizer = keras.optimizers.Adam(learning_rate=lr_pi)
+model_optimizer = tf.keras.optimizers.Adam(learning_rate=lr_w)
+mu_optimizer = tf.keras.optimizers.Adam(learning_rate=lr_mu)
+sigma_optimizer = tf.keras.optimizers.Adam(learning_rate=lr_sigma)
+pi_optimizer = tf.keras.optimizers.Adam(learning_rate=lr_pi)
 
 (x_train, y_train), (x_test, y_test) = get_mnist_data()
 
 with tf.GradientTape(persistent=True) as tape:
     predictions = model(x_train[:100], training=True)
-    err_loss = keras.losses.categorical_crossentropy(y_train[:100], predictions)
+    err_loss = tf.keras.losses.categorical_crossentropy(y_train[:100], predictions)
 
     model_weights = [layer.kernel for layer in model.layers if hasattr(layer, "kernel")]
 

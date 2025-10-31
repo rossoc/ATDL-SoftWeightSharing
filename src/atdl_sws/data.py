@@ -6,7 +6,6 @@ This module provides Keras equivalents of PyTorch data utilities from the ATDL2/
 
 import numpy as np
 import tensorflow as tf
-import keras
 from typing import Tuple
 
 
@@ -55,8 +54,8 @@ def _normalize_cifar100_data(train_images, test_images):
 
 
 def _convert_labels_to_categorical(train_labels, test_labels, num_classes: int):
-    categorical_train_labels = keras.utils.to_categorical(train_labels, num_classes)
-    categorical_test_labels = keras.utils.to_categorical(test_labels, num_classes)
+    categorical_train_labels = tf.keras.utils.to_categorical(train_labels, num_classes)
+    categorical_test_labels = tf.keras.utils.to_categorical(test_labels, num_classes)
     return categorical_train_labels, categorical_test_labels
 
 
@@ -147,7 +146,7 @@ def make_loaders(
 
 def get_mnist_data():
     (raw_train_images, raw_train_labels), (raw_test_images, raw_test_labels) = (
-        keras.datasets.mnist.load_data()
+        tf.keras.datasets.mnist.load_data()
     )
 
     normalized_train_images, normalized_test_images = _normalize_mnist_data(
@@ -166,7 +165,7 @@ def get_mnist_data():
 
 def get_cifar10_data():
     (raw_train_images, raw_train_labels), (raw_test_images, raw_test_labels) = (
-        keras.datasets.cifar10.load_data()
+        tf.keras.datasets.cifar10.load_data()
     )
 
     normalized_train_images, normalized_test_images = _normalize_cifar10_data(
@@ -185,7 +184,7 @@ def get_cifar10_data():
 
 def get_cifar100_data():
     (raw_train_images, raw_train_labels), (raw_test_images, raw_test_labels) = (
-        keras.datasets.cifar100.load_data()
+        tf.keras.datasets.cifar100.load_data()
     )
 
     normalized_train_images, normalized_test_images = _normalize_cifar100_data(

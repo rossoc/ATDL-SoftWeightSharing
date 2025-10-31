@@ -1,6 +1,5 @@
 from .data import get_mnist_data, get_cifar10_data, get_cifar100_data
 from .csv_logger import CSVLogger, format_seconds
-import keras
 import tensorflow as tf
 import time
 from tqdm import tqdm
@@ -37,7 +36,7 @@ def pretraining(
         (x_train, y_train), (x_test, y_test) = get_cifar100_data()
 
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
         loss="categorical_crossentropy",
         metrics=["accuracy"],
     )
@@ -51,14 +50,14 @@ def pretraining(
     train_dataset = train_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
     # Set up the optimizer
-    optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
     # Define the training step
     @tf.function(jit_compile=True)
     def train_step(x_batch, y_batch):
         with tf.GradientTape() as tape:
             predictions = model(x_batch, training=True)
-            loss = keras.losses.categorical_crossentropy(y_batch, predictions)
+            loss = tf.keras.losses.categorical_crossentropy(y_batch, predictions)
         gradients = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
         return tf.reduce_mean(loss)
