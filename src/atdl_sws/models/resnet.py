@@ -147,7 +147,7 @@ class ResNet(Model):
         return config
 
 
-def resnet(num_classes=10, regularizer=0, k=4):
+def resnet(num_classes=10, regularizer=0.0, std_init=0.01, k=4):
     res = ResNet(num_classes=num_classes, k=k)
     widths = tf.zeros((16, 16 * k, 32 * k, 64 * k))
     _ = res(widths)

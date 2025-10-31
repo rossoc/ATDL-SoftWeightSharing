@@ -68,9 +68,11 @@ class DataModelProvider:
         """Returns (x_train, y_train), (x_test, y_test)"""
         return self._train_data, self._test_data
 
-    def get_model(self, regularizer):
+    def get_model(self, regularizer, std_init):
         """Returns a brand new model with the needed features"""
-        return self._model_fn(num_classes=self._n_classes, regularizer=regularizer)
+        return self._model_fn(
+            num_classes=self._n_classes, std_init=std_init, regularizer=regularizer
+        )
 
 
 def _now_tag() -> str:
@@ -91,20 +93,18 @@ def objective(
     """
     # Sample hyperparameters to optimize
     tau = trial.suggest_float("tau", 1e-6, 6e-3, log=True)
-    lr_w = trial.suggest_float("lr_w", 1e-5, 1e-3, log=True)
-    lr_mu = trial.suggest_float("lr_mu", 1e-5, 5e-3, log=True)
-    lr_sigma = trial.suggest_float("lr_sigma", 1e-5, 1e-2, log=True)
+    lr_slow = trial.suggest_float("lr_w", 1e-5, 1e-3, log=True)
+    lr_fast = trial.suggest_float("lr_sigma", 1e-5, 1e-2, log=True)
     lr_pi = trial.suggest_float("lr_pi", 1e-5, 5e-3, log=True)
 
     # Prior parameters
     prior_pi0 = trial.suggest_float("prior_pi0", 0.85, 0.999)
-    prior_init_sigma = trial.suggest_float("prior_init_sigma", -1 * 1e2, 0.5)
+    prior_init_sigma = trial.suggest_float("prior_init_sigma", -10, 0.5)
     prior_gamma_alpha = trial.suggest_float("prior_gamma_alpha", 1e4, 1e5)
     prior_gamma_beta = trial.suggest_float("prior_gamma_beta", 1, 100)
-    prior_gamma_alpha0 = trial.suggest_float("prior_gamma_alpha0", 1e4, 1e5)
-    prior_gamma_beta0 = trial.suggest_float("prior_gamma_beta0", 5.0, 20.0)
     weight_decay = trial.suggest_float("weight_decay", 0.0, 0.5)
-    l2_term = trial.suggest_float("l2_term", 0.0, 0.5)
+    l1_term = trial.suggest_float("l1_term", 0.0, 0.5)
+    std_init = trial.suggest_float("std_init", 0.0, 0.2)
 
     # Fixed parameters that don't change
     prior_J = fixed_args.prior_J or 17
@@ -113,7 +113,7 @@ def objective(
 
     # Get dataset and model from the provider (not downloaded again)
     train_dataset, test_dataset = data_provider.get_data()
-    model = data_provider.get_model(l2_term)
+    model = data_provider.get_model(l1_term, std_init)
 
     # Initialize prior with sampled parameters
     prior = MixturePrior(
@@ -123,26 +123,26 @@ def objective(
         init_log_sigma2=prior_init_sigma,
         gamma_alpha=prior_gamma_alpha,
         gamma_beta=prior_gamma_beta,
-        gamma_alpha0=prior_gamma_alpha0,
-        gamma_beta0=prior_gamma_beta0,
+        gamma_alpha0=prior_gamma_alpha,
+        gamma_beta0=prior_gamma_beta,
     )
 
     # Setup visualization and logging
     args_for_viz = argparse.Namespace(
         **vars(fixed_args),
         tau=tau,
-        lr_w=lr_w,
-        lr_mu=lr_mu,
-        lr_sigma=lr_sigma,
-        lr_pi=lr_pi,
+        lr_w=lr_slow,
+        lr_mu=lr_slow,
+        lr_sigma=lr_fast,
+        lr_pi=lr_fast,
         prior_pi0=prior_pi0,
         prior_init_sigma=prior_init_sigma,
         prior_gamma_alpha=prior_gamma_alpha,
         prior_gamma_beta=prior_gamma_beta,
-        prior_gamma_alpha0=prior_gamma_alpha0,
-        prior_gamma_beta0=prior_gamma_beta0,
+        prior_gamma_alpha0=prior_gamma_alpha,
+        prior_gamma_beta0=prior_gamma_beta,
         weight_decay=weight_decay,
-        l2_term=l2_term,
+        regularizer=l1_term,
     )
 
     viz, logger, metrics = setup_visualization_and_logging(
@@ -157,10 +157,10 @@ def objective(
             epochs,
             train_dataset,
             tau=tau,
-            lr_w=lr_w,
-            lr_mu=lr_mu,
-            lr_sigma=lr_sigma,
-            lr_pi=lr_pi,
+            lr_w=lr_slow,
+            lr_mu=lr_slow,
+            lr_sigma=lr_fast,
+            lr_pi=lr_fast,
             batch_size=batch_size,
             save_dir=fixed_args.save_dir + "/t" + str(trial._trial_id),
             viz=viz,
