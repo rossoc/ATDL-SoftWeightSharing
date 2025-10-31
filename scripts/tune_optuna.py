@@ -98,13 +98,13 @@ def objective(
     lr_pi = trial.suggest_float("lr_pi", 1e-5, 5e-3, log=True)
 
     # Prior parameters
-    prior_pi0 = trial.suggest_float("prior_pi0", 0.85, 0.999)
+    prior_pi0 = trial.suggest_float("prior_pi0", 0.9, 0.999)
     prior_init_sigma = trial.suggest_float("prior_init_sigma", -10, 0.5)
-    prior_gamma_alpha = trial.suggest_float("prior_gamma_alpha", 1e4, 1e5)
+    prior_gamma_alpha = trial.suggest_float("prior_gamma_alpha", 1e4, 1e6)
     prior_gamma_beta = trial.suggest_float("prior_gamma_beta", 1, 100)
-    weight_decay = trial.suggest_float("weight_decay", 0.0, 0.5)
-    l1_term = trial.suggest_float("l1_term", 0.0, 0.5)
-    std_init = trial.suggest_float("std_init", 0.0, 0.2)
+    weight_decay = trial.suggest_float("weight_decay", 0.0, 0.5, log=True)
+    l1_term = trial.suggest_float("l1_term", 0.0, 0.5, log=True)
+    std_init = trial.suggest_float("std_init", 0.0, 0.1, log=True)
 
     # Fixed parameters that don't change
     prior_J = fixed_args.prior_J or 17
